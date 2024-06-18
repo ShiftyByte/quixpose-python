@@ -14,7 +14,7 @@ class TunnelConnectionHandler:
         self._dst_sock = dst_sock
         # start socket recv thread
         self._sock_thread = Thread(target=self.process_outgoing)
-        self._sock_thread.run()
+        self._sock_thread.start()
 
     def process_outgoing(self):
         # get data, and send it in a loop
@@ -25,7 +25,7 @@ class TunnelConnectionHandler:
 
     def process_incoming(self, data):
         # got data from upstream, send it into the socket
-        self._dst_sock.send_all(data)
+        self._dst_sock.sendall(data)
 
 class Tunnel:
     def __init__(self, **kwargs):
@@ -46,17 +46,22 @@ class Tunnel:
         self._connections = {}
 
     def on_connect(self, source):
+        self.logger.info(f"[CONNECTION] From {source}")
         # connect to target
         dst_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         dst_sock.connect((self.dst_host, self.dst_port))
+        # self.logger.debug(f"[TCP] connected to {self.dst_host}:{self.dst_port}")
         # create a tunnel connection handler
         self._connections[source] = TunnelConnectionHandler(self._client, source, dst_sock)
     
     def on_disconnect(self, source):
+        self.logger.info(f"[DISCONNECT] From {source}")
         if source in self._connections:
             self._connections[source].stop()
+            del self._connections[source]
     
     def on_recv(self, source, data):
+        # self.logger.debug(f"[DATA] from {source}, {len(data)} bytes.")
         if source in self._connections:
             self._connections[source].process_incoming(data)
 
@@ -71,7 +76,7 @@ class Tunnel:
             self.logger.error("[ERROR] Could not get an endpoint", exc_info=True)
             return
         self.logger.info(f"[ENDPOINT] {epid}")
-        self.logger.success(f"[READY] api.quixpose.io:{remote_port}")
+        self.logger.success(f"[TUNNEL] Ready @ api.quixpose.io:{remote_port}")
         # connect to the controlling websocket
         self._client.connect(on_connect=self.on_connect, on_recv=self.on_recv, on_disconnect=self.on_disconnect)
         # we don't have anything to send at this point, so just let the client process

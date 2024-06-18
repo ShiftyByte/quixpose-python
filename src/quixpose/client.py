@@ -61,6 +61,7 @@ class Client:
         pass
 
     def _ws_on_message(self, ws, message):
+        # print(message)
         try:
             jmsg = json.loads(message)
         except json.JSONDecodeError:
@@ -94,7 +95,7 @@ class Client:
         # make sure we have an on_recv callback
         if on_recv is None:
             raise ClientError(ClientErrorCategory.USAGE, "on_recv callback must be provided, with the structure on_recv(source, data).")
-        self._rcv_callback = on_recv
+        self._recv_callback = on_recv
         # make sure we have an on_connect callback
         if on_connect is None:
             raise ClientError(ClientErrorCategory.USAGE, "on_connect callback must be provided, with the structure on_connect(source).")
@@ -127,5 +128,5 @@ class Client:
         self._ws.send(json.dumps({
             "action": "send",
             "dst":  dest,
-            "data": base64.standard_b64encode(data)
+            "data": base64.standard_b64encode(data).decode()
         }))
