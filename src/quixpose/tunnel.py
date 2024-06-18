@@ -1,27 +1,78 @@
 import logging
-from .client import Client
+import socket
+from threading import Thread
+from .client import Client, ClientError
 
-TUNNEL_ARG_DST_HOST = "dst_host"
 TUNNEL_DEFAULT_DST_HOST = "localhost"
-TUNNEL_ARG_DST_PORT = "dst_port"
 TUNNEL_DEFAULT_DST_PORT = 80
-TUNNEL_ARG_LOGGER = "logger"
 TUNNEL_DEFAULT_LOG_APP = "quixpose"
+
+class TunnelConnectionHandler:
+    def __init__(self, client, source, dst_sock):
+        self._client = client
+        self._source = source
+        self._dst_sock = dst_sock
+        # start socket recv thread
+        self._sock_thread = Thread(target=self.process_outgoing)
+        self._sock_thread.run()
+
+    def process_outgoing(self):
+        # get data, and send it in a loop
+        data = self._dst_sock.recv(4096)
+        while data:
+            self._client.send(self._source, data)
+            data = self._dst_sock.recv(4096)
+
+    def process_incoming(self, data):
+        # got data from upstream, send it into the socket
+        self._dst_sock.send_all(data)
 
 class Tunnel:
     def __init__(self, **kwargs):
+        self._client = None
         # Load destination host
         self.dst_host = TUNNEL_DEFAULT_DST_HOST
-        if TUNNEL_ARG_DST_HOST in kwargs:
-            self.dst_host = kwargs[TUNNEL_ARG_DST_HOST]
+        if "dst_host" in kwargs:
+            self.dst_host = kwargs['dst_host']
         # Load destination port
         self.dst_port = TUNNEL_DEFAULT_DST_PORT
-        if TUNNEL_ARG_DST_PORT in kwargs:
-            self.dst_port = kwargs[TUNNEL_ARG_DST_PORT]
-        if TUNNEL_ARG_LOGGER in kwargs:
-            self.logger = kwargs[TUNNEL_ARG_LOGGER]
+        if "dst_port" in kwargs:
+            self.dst_port = kwargs['dst_port']
+        if "logger" in kwargs:
+            self.logger = kwargs['logger']
         else:
             self.logger = logging.getLogger(TUNNEL_DEFAULT_LOG_APP)
+        # start connections dict
+        self._connections = {}
+
+    def on_connect(self, source):
+        # connect to target
+        dst_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        dst_sock.connect((self.dst_host, self.dst_port))
+        # create a tunnel connection handler
+        self._connections[source] = TunnelConnectionHandler(self._client, source, dst_sock)
     
+    def on_disconnect(self, source):
+        if source in self._connections:
+            self._connections[source].stop()
+    
+    def on_recv(self, source, data):
+        if source in self._connections:
+            self._connections[source].process_incoming(data)
+
     def run_blocking(self):
-        raise NotImplementedError
+        self.logger.info(f"[TUNNEL] Starting tunnel to {self.dst_host}:{self.dst_port}")
+        # get the client instance
+        self._client = Client()
+        # get an endpoint
+        try:
+            epid, remote_port = self._client.get_endpoint()
+        except ClientError as e: 
+            self.logger.error("[ERROR] Could not get an endpoint", exc_info=True)
+            return
+        self.logger.info(f"[ENDPOINT] {epid}")
+        self.logger.success(f"[READY] api.quixpose.io:{remote_port}")
+        # connect to the controlling websocket
+        self._client.connect(on_connect=self.on_connect, on_recv=self.on_recv, on_disconnect=self.on_disconnect)
+        # we don't have anything to send at this point, so just let the client process
+        self._client.process_blocking()
