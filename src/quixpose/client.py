@@ -130,3 +130,13 @@ class Client:
             "dst":  dest,
             "data": base64.standard_b64encode(data).decode()
         }))
+    
+    def send_disconnect(self, dest):
+        # make sure we have connected ws
+        if self._ws is None:
+            raise ClientError(ClientErrorCategory.USAGE, "Cannot send data without an active connection, use connect() first.")
+        # encode data, make a json and send it
+        self._ws.send(json.dumps({
+            "action": "disconnect",
+            "dst":  dest
+        }))

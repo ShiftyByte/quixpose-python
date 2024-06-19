@@ -10,6 +10,7 @@ TUNNEL_DEFAULT_LOG_APP = "quixpose"
 
 class TunnelConnectionHandler:
     def __init__(self, client, source, dst_sock):
+        self._got_close = False
         self._client = client
         self._source = source
         self._dst_sock = dst_sock
@@ -23,12 +24,17 @@ class TunnelConnectionHandler:
         while data:
             self._client.send(self._source, data)
             data = self._dst_sock.recv(4096)
+        if not self._got_close:
+            # closing down because of tcp socket
+            self._client.send_disconnect(self._source)
 
     def process_incoming(self, data):
         # got data from upstream, send it into the socket
         self._dst_sock.sendall(data)
     
     def stop(self):
+        # mark we already got close signal
+        self._got_close = True
         # unstuck the recv()
         self._dst_sock.shutdown(socket.SHUT_RDWR)
         # close dst_sock
