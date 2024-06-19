@@ -7,6 +7,7 @@ TUNNEL_DEFAULT_DST_HOST = "localhost"
 TUNNEL_DEFAULT_DST_PORT = 80
 TUNNEL_DEFAULT_LOG_APP = "quixpose"
 
+
 class TunnelConnectionHandler:
     def __init__(self, client, source, dst_sock):
         self._client = client
@@ -26,6 +27,12 @@ class TunnelConnectionHandler:
     def process_incoming(self, data):
         # got data from upstream, send it into the socket
         self._dst_sock.sendall(data)
+    
+    def stop(self):
+        # unstuck the recv()
+        self._dst_sock.shutdown(socket.SHUT_RDWR)
+        # close dst_sock
+        self._dst_sock.close()
 
 class Tunnel:
     def __init__(self, **kwargs):
