@@ -89,7 +89,7 @@ class Tunnel:
             self.logger.error("[ERROR] Could not get an endpoint", exc_info=True)
             return
         self.logger.info(f"[ENDPOINT] {epid}")
-        self.logger.success(f"[TUNNEL] Ready @ api.quixpose.io:{remote_port}")
+        self.logger.success(f"[TUNNEL] Ready @ tcp.quixpose.io:{remote_port}")
         # connect to the controlling websocket
         self._client.connect(on_connect=self.on_connect, on_recv=self.on_recv, on_disconnect=self.on_disconnect)
         # we don't have anything to send at this point, so just let the client process
