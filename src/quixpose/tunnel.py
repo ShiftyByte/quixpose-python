@@ -14,8 +14,8 @@ class TunnelConnectionHandler:
         self._client = client
         self._source = source
         self._dst_sock = dst_sock
-        # start socket recv thread
-        self._sock_thread = Thread(target=self.process_outgoing)
+        # start socket recv thread, make sure its daemon so it dies on ctrl+c.
+        self._sock_thread = Thread(target=self.process_outgoing, daemon=True)
         self._sock_thread.start()
 
     def process_outgoing(self):
@@ -62,7 +62,12 @@ class Tunnel:
         self.logger.info(f"[CONNECTION] From {source}")
         # connect to target
         dst_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        dst_sock.connect((self.dst_host, self.dst_port))
+        try:
+            dst_sock.connect((self.dst_host, self.dst_port))
+        except ConnectionError:
+            # could not connect locally, send disconnect back to ws upstream
+            self._client.send_disconnect(source)
+            return
         # self.logger.debug(f"[TCP] connected to {self.dst_host}:{self.dst_port}")
         # create a tunnel connection handler
         self._connections[source] = TunnelConnectionHandler(self._client, source, dst_sock)
@@ -75,6 +80,13 @@ class Tunnel:
     
     def on_recv(self, source, data):
         # self.logger.debug(f"[DATA] from {source}, {len(data)} bytes.")
+        # check if the connection is comming for a previously established connection (crash or rerun of client)
+        # try to reconnect.
+        if source not in self._connections:
+            # try to reconnect again
+            self.on_connect(source)
+        
+        # if connection is up or reconnection worked, deliver the data
         if source in self._connections:
             self._connections[source].process_incoming(data)
 
