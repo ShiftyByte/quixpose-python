@@ -84,13 +84,12 @@ class Tunnel:
     
     def on_recv(self, source, data):
         # self.logger.debug(f"[DATA] from {source}, {len(data)} bytes.")
-        # check if the connection is comming for a previously established connection (crash or rerun of client)
-        # try to reconnect.
+        # data incoming for an unknown connection, even if we attempt to reconnect we probably won't make a valid session since its tcp mid-session data.
+        # so we send a disconnect upstream
         if source not in self._connections:
-            # try to reconnect again
-            self.on_connect(source)
-
-        # if connection is up or reconnection worked, deliver the data
+            self._client.send_disconnect(source)
+            return
+        # if connection is up, deliver the data
         if source in self._connections:
             self._connections[source].process_incoming(data)
 
