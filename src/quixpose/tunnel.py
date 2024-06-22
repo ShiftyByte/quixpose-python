@@ -20,10 +20,14 @@ class TunnelConnectionHandler:
 
     def process_outgoing(self):
         # get data, and send it in a loop
-        data = self._dst_sock.recv(4096)
-        while data:
-            self._client.send(self._source, data)
+        try:
             data = self._dst_sock.recv(4096)
+            while data:
+                self._client.send(self._source, data)
+                data = self._dst_sock.recv(4096)
+        except ConnectionError:
+            # remote connection reset, or something
+            self.logger.info(f"[LOCAL] Connection Interrupted, Notifying upstream.")
         if not self._got_close:
             # closing down because of tcp socket
             self._client.send_disconnect(self._source)
@@ -85,7 +89,7 @@ class Tunnel:
         if source not in self._connections:
             # try to reconnect again
             self.on_connect(source)
-        
+
         # if connection is up or reconnection worked, deliver the data
         if source in self._connections:
             self._connections[source].process_incoming(data)
