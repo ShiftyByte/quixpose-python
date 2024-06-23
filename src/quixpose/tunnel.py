@@ -46,6 +46,8 @@ class TunnelConnectionHandler:
 
 class Tunnel:
     def __init__(self, **kwargs):
+        # is_up used to check if tunnel is done connecting
+        self.is_up = False
         self._client = None
         # Load destination host
         self.dst_host = TUNNEL_DEFAULT_DST_HOST
@@ -99,13 +101,15 @@ class Tunnel:
         self._client = Client()
         # get an endpoint
         try:
-            epid, remote_port = self._client.get_endpoint()
+            self.endpoint_id, self.endpoint_port = self._client.get_endpoint()
         except ClientError as e: 
             self.logger.error("[ERROR] Could not get an endpoint", exc_info=True)
             return
-        self.logger.info(f"[ENDPOINT] {epid}")
-        self.logger.success(f"[TUNNEL] Ready @ tcp.quixpose.io:{remote_port}")
+        self.logger.info(f"[ENDPOINT] {self.endpoint_id}")
+        self.logger.info(f"[TUNNEL] Ready @ tcp.quixpose.io:{self.endpoint_port}")
         # connect to the controlling websocket
         self._client.connect(on_connect=self.on_connect, on_recv=self.on_recv, on_disconnect=self.on_disconnect)
+        # flag we are connected
+        self.is_up = True
         # we don't have anything to send at this point, so just let the client process
         self._client.process_blocking()
